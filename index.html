@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Answer Key Practice Viewer</title>
+  <script src="./script/pdf.mjs" type="module"></script>
+  <style>
+    #back, #front {
+      border: 1px solid black;
+      direction: ltr;
+      position: absolute;
+      top: 0px;
+      bottom: 0px;
+      left: 0px;
+      right: 0px;
+    }
+    #back { filter: invert(75%); }
+    #toolbar {
+      position: fixed;
+      bottom: 0px;
+      left: 0px;
+      padding: 10px;
+      display: flex;
+      flex-direction: row;
+      background-color: #fff7;
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <h1>Loading...</h1>
+    <canvas id="back"></canvas>
+    <canvas id="front"></canvas>
+  </div>
+
+  <div id="toolbar">
+    <button onclick="page -= 1; window.render();"><</button>
+    <div>Page <span id="pageid"></span></div>
+    <button onclick="page += 1; window.render();">></button>
+    <span style="margin-left: 20px;">Blank:</span><input onchange="setDocument('blank', this.files[0])" type="file">
+    <span style="margin-left: 20px;">Soln:</span><input onchange="setDocument('soln', this.files[0])" type="file">
+  </div>
+
+  <script>
+    async function renderPage(pdf, cname, n) {
+      const page = await pdf.getPage(n);
+      const scale = 1.5;
+      const viewport = page.getViewport({ scale });
+      const outputScale = window.devicePixelRatio || 1;
+
+      const canvas = document.getElementById(cname);
+      const context = canvas.getContext("2d");
+
+      canvas.width = Math.floor(viewport.width * outputScale);
+      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.style.width = Math.floor(viewport.width) + "px";
+      canvas.style.height = Math.floor(viewport.height) + "px";
+
+      const transform = outputScale !== 1
+        ? [outputScale, 0, 0, outputScale, 0, 0]
+        : null;
+      
+      const renderContext = {
+        canvasContext: context,
+        transform,
+        viewport,
+      };
+      page.render(renderContext);
+      return context;
+    }
+    
+    const setupCanvas = function (canvas) {
+      const ctx = canvas.getContext("2d");
+      let x, y, isDrawing;
+
+      const handleMouseDown = (e) => {
+        isDrawing = true;
+        x = e.offsetX;
+        y = e.offsetY;
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.arc(x, y, 50, 0, Math.PI * 2);
+        ctx.fill();
+      };
+
+      const handleMouseMove = (e) => {
+        if (!isDrawing) return;
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(e.offsetX, e.offsetY);
+        ctx.lineWidth = 100;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        x = e.offsetX;
+        y = e.offsetY;
+      };
+
+      const handleMouseUp = (e) => {
+        isDrawing = false;
+      };
+
+      canvas.addEventListener("pointerdown", handleMouseDown);
+      canvas.addEventListener("pointermove", handleMouseMove);
+      canvas.addEventListener("pointerup", handleMouseUp);
+    };
+    setupCanvas(document.getElementById("front"));
+    
+    let page = 1;
+    const pdfs = {};
+    async function render() {
+      if (!pdfs.blank || !pdfs.soln) {
+        alert("PDF not yet loaded");
+        return;
+      }
+      
+      window.scrollTo(0, 0);
+      const pageid = document.getElementById('pageid');
+      pageid.innerText = `${page}`;
+      pageid.style.color = "";
+      try {
+        await renderPage(pdfs.blank, "front", page);
+        await renderPage(pdfs.soln, "back", page);
+      } catch(e) {
+        console.log(e);
+        pageid.style.color = "red";
+      }
+    }
+    
+    function readFile(f) {
+      const reader = new FileReader();
+      return new Promise((res, rej) => {
+        reader.onload = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsArrayBuffer(f);
+      });
+    }
+    
+    async function setDocument(varname, file) {
+      page = 1;
+      if (!file) {
+        alert("Error: Invalid file");
+      }
+      try {
+        pdfs[varname] = await pdfjsLib.getDocument(await readFile(file)).promise;
+      } catch(e) {
+        console.log(e);
+        alert(`Error parsing file: ${e}`);
+      }
+      console.log("New document set, rerendering");
+      render();
+    }
+    async function loadInitial() {
+      pdfs.blank = await pdfjsLib.getDocument('./pdf/blank.pdf').promise;
+      pdfs.soln = await pdfjsLib.getDocument('./pdf/soln.pdf').promise;
+      render();
+    }
+    window.addEventListener('load', function () {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = './script/pdf.worker.mjs';
+      loadInitial();
+    });
+  </script>
+</body>
+</html>
