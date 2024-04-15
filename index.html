@@ -20,9 +20,14 @@
       bottom: 0px;
       left: 0px;
       padding: 10px;
+      background-color: #777a;
+    }
+    #toolbar, .flexbar {
       display: flex;
       flex-direction: row;
-      background-color: #fff7;
+    }
+    #toolbar > * {
+      margin-right: 15px;
     }
   </style>
 </head>
@@ -35,11 +40,17 @@
   </div>
 
   <div id="toolbar">
-    <button onclick="page -= 1; window.render();"><</button>
-    <div>Page <span id="pageid"></span></div>
-    <button onclick="page += 1; window.render();">></button>
-    <span style="margin-left: 20px;">Blank:</span><input onchange="setDocument('blank', this.files[0])" type="file">
-    <span style="margin-left: 20px;">Soln:</span><input onchange="setDocument('soln', this.files[0])" type="file">
+    <div class="flexbar">
+      <button onclick="page--; render();"><</button>
+      <div>Page <span id="pageid"></span></div>
+      <button onclick="page++; render();">></button>
+    </div>
+    <div>
+      <button onclick="render();">Reset</button>
+      <button onclick="eraseCanvas('front');">Reveal</button>
+    </div>
+    <span>Blank:</span><input onchange="setDocument('blank', this.files[0])" type="file">
+    <span>Soln:</span><input onchange="setDocument('soln', this.files[0])" type="file">
   </div>
 
   <script>
@@ -70,7 +81,13 @@
       return context;
     }
     
-    const setupCanvas = function (canvas) {
+    function eraseCanvas(cname) {
+      const canvas = document.getElementById(cname);
+      const context = canvas.getContext('2d');
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    function setupCanvas(canvas) {
       const ctx = canvas.getContext("2d");
       let x, y, isDrawing;
 
@@ -105,7 +122,6 @@
       canvas.addEventListener("pointermove", handleMouseMove);
       canvas.addEventListener("pointerup", handleMouseUp);
     };
-    setupCanvas(document.getElementById("front"));
     
     let page = 1;
     const pdfs = {};
@@ -152,12 +168,14 @@
       render();
     }
     async function loadInitial() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = './script/pdf.worker.mjs';
       pdfs.blank = await pdfjsLib.getDocument('./pdf/blank.pdf').promise;
       pdfs.soln = await pdfjsLib.getDocument('./pdf/soln.pdf').promise;
       render();
     }
+    
+    setupCanvas(document.getElementById("front"));
     window.addEventListener('load', function () {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = './script/pdf.worker.mjs';
       loadInitial();
     });
   </script>
